@@ -47,6 +47,7 @@ const createNewBlock = data => { // 새로운 블록을 만듬
     newTimestamp,
     data
   );
+  addBlockToChain(newBlock);
   return newBlock;
 }
 
@@ -117,5 +118,10 @@ const addBlockToChain = candidateBlock => {
   }
 };
 
-addBlockToChain(createNewBlock("Hi"));
-console.log(getBlockchain());
+//addBlockToChain(createNewBlock("Hi"));
+//console.log(getBlockchain());
+
+module.exports = {
+  getBlockchain,
+  createNewBlock,
+}
