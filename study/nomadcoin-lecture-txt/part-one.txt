@@ -1,0 +1,12 @@
+해쉬=인덱스+이전해시+타임스탬프+데이터
+
+
+해싱 필요 모듈
+crypto-js
+express
+morgan: 로그인을 위한 로그
+body-parser
+nodemon
+ws : 소켓 통신을 위한 모듈
+
+socket: 서버 사이의 커넥션

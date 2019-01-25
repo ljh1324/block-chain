@@ -1,0 +1,29 @@
+암호화폐
+1. Scarcity 유한성.
+ -> 비트코인 모두 채굴 가능
+
+2. Fungibility 교환성
+ -> 화폐 끼리 교환 가능, 암호화폐 끼리 교환 가능
+
+3. Divisibility 가분성
+ -> 나눌 수 있음
+
+4. Durability 내구성
+ -> 1년이 지나도 가치가 변하지 않음
+
+5. Transferability 전달성
+ -> 전달 할 수 있음, 종이 화폐는 종이를 줌, 비트코인은 인터넷으로 전달 가능
+
+6. Stability 안정성
+ -> 가치가 안정해야 함. 비트코인은 가치가 안정되지 않음
+
+
+
+비트코인 특징
+1. Decentralization
+2. Peer 2 Peer
+ : 3자가 없음.
+3. Pseudonymous
+ : 익명성. 가명을 보장
+4. Instant Transaction
+ : 즉시 거래 가능
