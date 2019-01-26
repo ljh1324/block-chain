@@ -1,0 +1,69 @@
+* blockchain.js 블록 체인을 위한 모듈 모음
+ in "crypto-js": SHA256 암호화 모듈
+
+ - class Block: 블록 클래스.
+   순서번호, 해시값, 이전 블록 해시값, 생성 시간, 데이터
+
+ - genesisBlock[Block]: 제네시스 블록
+
+ - blockchain[Array]: 블록 체인을 저장한 배열
+
+ - getLastBlock: 가장 최근 블록 반환
+ 
+ - getTimestamp: 현재 시간(초) 반환
+ 
+ - getBlockchain: 현재 가지고 있는 블록 체인 반환
+
+ - createHash(순서번호, 이전 블록 해시값, 생성 시간, 데이터): 순서번호, 이전 블록 해시값, 생성 시간, 데이터를 합하여 SHA256 해시 함수를 통해 해시값을 만듬
+
+ - createNewBlock(데이터): 데이터를 받아 새로운 블록을 생성 및 블록 체인에 블록 추가
+
+ - getBlockHash(블록): 블록을 받아 블록의 해시값 반환
+
+ - isNewBlockValid(후보블록, 최근블록): 후보블록의 구조가 옳바른지, 후보블록의 이전 블록 해시가 최근 블록을 가르키는지, 후보 블록의 해시값이 옳바른지, 최근블록과의 순서번호를 비교하여 후보 블록의 유효성 검증
+
+ - isNewStructureValid(블록): 블록의 구조가 옳바른 구조를 가지고 있는지 반환
+
+ - isChainValid(후보 체인): 제네시스 블록이 옳바른지, 블록들이 이전 해시 블록을 옳바르게 가르키고 있는지 유효성 검증
+
+ - replaceChain(후보 체인): 체인을 검증하고 현재 가지고 있는 체인보다 길 경우 현재 가지고 있는 체인을 후보 체인으로 바꿔줌
+
+ - addBlockToChain(후보 블록): 최근 블록과 후보 블록을 통해 후보 블록이 유효한지 판단 후 블록 체인에 후보 블록 추가
+
+
+* p2p.js 소켓 서버를 위한 모듈 모음
+ in "ws": 웹 소켓 모듈, "./blockchain": 블록체인 모듈
+
+ - sockets[Array]: 연결된 소켓을 저장할 배열
+
+ - GET_LATEST: 소켓 통신 메시지 타입. 최근 블록을 연결된 소켓에게 전달
+ - GET_ALL: 소켓 통신 메시지 타입
+ - BLOCKCHAIN_RESPONSE: 소켓 통신 메시지 타입
+
+ - getSockets(): 연결된 소켓을 반환함
+
+ - startP2PServer(server): 웹 소켓 서버를 생성. connection 메시지(다른 소켓이 연결을 했을때 발생하는 이벤트) 핸들링
+ 
+ - initSocketConnection(ws): 소켓을 연결했을 때 초기화 루틴이 들어있는 함수. sockets에 소켓정보를 넣고, 에러 메시지 핸들, 일반 메시지 핸들 추가. 연결된 소켓에게 최근 블록 전송
+
+ - parseData(data): data를 JSON화 시킴
+
+ - handleSocketMessage: 메시지 타입에 따라 메시지 처리를 하는 핸들러 추가
+
+ - sendMessage(ws, message): ws 소켓에게 메시지를 send 함
+
+ - handleSocketError(ws): ws가 에러가 발생하거나 소켓을 끊을 경우 해당 ws를 연결된 소켓 배열에서 제거 해주는 핸들 함수 추가
+
+ - connectToPeers(newPeer): 웹 소켓 서버와 소켓 통신 연결
+
+
+
+* server.js
+ in "express": 웹 서버 프레임워크, "body-parser": request 해석 모듈, "morgan": 서버 이용시 로그를 남김, "./blockchain": 블록체인 모듈, "./p2p" 소켓서버 모듈
+
+ - PORT: 오픈할 포트 번호
+
+ @ GET /blocks : 블록 체인 정보 반환
+ @ POST /blocks : 블록 추가
+ @ POST /peers : 소켓 연결 추가
+  
