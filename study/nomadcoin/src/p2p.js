@@ -20,6 +20,7 @@ const startP2PServer =  server => {
 
 const initSocketConnection = socket => { // 새로운 소켓이 접속할때마다 보여짐
   sockets.push(socket);
+  handleSocketError(socket);
   //console.log(sockets);
   socket.on("message", data => {
     console.log(data);
@@ -29,6 +30,14 @@ const initSocketConnection = socket => { // 새로운 소켓이 접속할때마�
   }, 5000);
 }
 
+const handleSocketError = ws => {
+  const closeSocketConnection = ws => {
+    ws.close();
+    sockets.splice(sockets.indexOf(ws), 1);
+  };
+  ws.on("close", () => closeSocketConnection(ws)); // 닫을 때 발생하는 이벤트에 대한 함수 추가
+  ws.on("error", () => closeSocketConnection(ws));
+};
 const connectToPeers = newPeer => { // newPeer = 웹 소켓 서버가 실행되고 있는 URL
   const ws = new WebSockets(newPeer);
   ws.on("open", () => { // ws의 소켓을 열어줌. socket connection 실행. 새로운 소켓이 연결될 때 실행
