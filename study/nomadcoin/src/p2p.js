@@ -3,7 +3,7 @@
 const WebSockets = require("ws");
  Blockchain = require("./blockchain");
 
- const {getLastBlock} = Blockchain; // 가장 최근 블록 요청
+ const {getNewestBlock, getBlockchain, isBlockStructureValid, addBlockToChain, replaceChain} = Blockchain; // 가장 최근 블록 요청
 
 // socket: 서버 사이의 커넥션
 // PeerB - PeerA 연결시 PeerB에게는 PeerA 정보가 있음
@@ -63,6 +63,7 @@ const parseData = data => {
     return null;
   }
 }
+
 const handleSocketMessages = ws => {
   ws.on("message", data => { // ws.send를 통해 받은 메시지를 처리함
     const message = parseData(data);
@@ -72,15 +73,63 @@ const handleSocketMessages = ws => {
     console.log(message);
     switch(message.type) {
       case GET_LATEST:
-        sendMessage(ws, getLastBlock());
+        //sendMessage(ws, getLastBlock());
+        sendMessage(ws, responseLatest()); // send message to all socket (port:3000 to 4000, port:4000 to 3000)
+        break;
+      case GET_ALL:
+        sendMessage(ws, responseAll());
+        break;
+      case BLOCKCHAIN_RESPONSE:
+        const receivedBlocks = message.data;
+        if (receivedBlocks === null) {
+          break;
+        }
+        handleBlockchainResponse(receivedBlocks);
         break;
     }
   });
 };
 
+const handleBlockchainResponse = receivedBlocks => {
+  if (receivedBlocks.length === 0) {
+    console.log("Received blocks have a length of 0");
+    return;
+  }
+  const latestBlockReceived = receivedBlocks[receivedBlocks.length - 1];
+  if (!isBlockStructureValid(latestBlockReceived)) { // 만약 받은 블럭이 제네시스 블럭일 경우 previousHash가 null이므로 block structure가 옳바르지 않음
+    console.log("The block structure of the block received is not valid");
+    return;
+  }
+  const newestBlock = getNewestBlock(); // 자신의 가지고 있는 블록체인의 가장 최근 블록을 가져옴
+
+  // 받은 블록 체인의 마지막 블록이 자신이 가지고 있는 블록체인 마지막 블록 보다 앞설 경우
+  if (latestBlockReceived.index > newestBlock.index) {
+    // 받은 블록 체인의 마지막 블록의 순서번호가 가지고 있는 최근 블록 보다 1번 앞설 경우
+    // 받은 블록체인의 이전 블록을 가르키는 해시값이 가지고 있는 블록의 해시값인 경우를 체크해야함
+    if (newestBlock.hash === latestBlockReceived.previousHash) {
+      if (addBlockToChain(latestBlockReceived)) { // 받은 블록이 체인에 추가될 경우
+        broadcastNewBlock();
+      }
+    }
+    else if (receivedBlocks.length === 1) { // responseLatest() 함수로 받은 블록은 길이가 1임. 그러므로 모든 블록을 다시 받아와야 함
+      // to do, get all the blocks, we are waaaay behind
+      sendMessageToAll(getAll());
+    }
+    else {
+      replaceChain(receivedBlocks);
+    }
+  }
+};
 
 const sendMessage = (ws, message) => ws.send(JSON.stringify(message));
 
+const sendMessageToAll = message => sockets.forEach(ws => sendMessage(ws, message));
+
+const responseLatest = () => blockchainResponse([getNewestBlock()]); 
+
+const responseAll = () => blockchainResponse(getBlockchain());
+
+const broadcastNewBlock = () => sendMessageToAll(responseLatest());
 
 const handleSocketError = ws => { // 소켓에 에러 발생 혹은 커넥션 종료 시 처리할 이벤트 등록
   const closeSocketConnection = ws => {
@@ -102,4 +151,5 @@ const connectToPeers = newPeer => { // newPeer = 웹 소켓 서버가 실행되�
 module.exports = {
   startP2PServer,
   connectToPeers,
+  broadcastNewBlock,
 };
