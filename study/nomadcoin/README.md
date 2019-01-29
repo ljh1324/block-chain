@@ -13,4 +13,5 @@ morgan: 로그인을 위한 로그
 body-parser  
 nodemon  
 ws: 소켓 통신을 위한 모듈  
-nodemon  
+nodemon
+hex-to-binary: 16진수를 2진수로 변환하기 위한 모듈
