@@ -4,15 +4,15 @@ const CryptoJS = require("crypto-js"),
 const BLOCK_GENERATION_INTERVAL = 10; // 블록이 몇 초마다 생성될 것인지
 const DIFFICULTY_ADJUSMENT_INTERVAL = 10; // 몇 블록마다 난이도를 조정할 것인지
 
-class Block { // Block의 순서, Block의 해시값, 이전 Block의 해시값, 생성 시간, 데이터, 난이도, nonce를 가짐
+class Block { 
   constructor(index, hash, previousHash, timestamp, data, difficulty, nonce) {
-    this.index = index;
-    this.hash = hash;
-    this.previousHash = previousHash;
-    this.timestamp = timestamp;
-    this.data = data;
-    this.difficulty = difficulty;
-    this.nonce = nonce;
+    this.index = index; // Block 순서
+    this.hash = hash; // Block 해시값
+    this.previousHash = previousHash; // 이전 Block의 해시값
+    this.timestamp = timestamp; // 생성 시간
+    this.data = data; // 데이터
+    this.difficulty = difficulty; // 난이도
+    this.nonce = nonce; // nonce
   }
 }
 
@@ -51,13 +51,15 @@ const createNewBlock = data => { // 새로운 블록을 만듬
   );
 
   addBlockToChain(newBlock);
-  require('./p2p').broadcastNewBlock();
+  require('./p2p').broadcastNewBlock(); // 현재 서버와 연결된 노드에게 새로운 블록이 만들어졌다고 알림
   return newBlock;
 }
 
 const findDifficulty = () => {
   const newestBlock = getNewestBlock() // 블록체인의 가장 최근 생성된 블록을 변수에 저장
-  if (newestBlock.index % DIFFICULTY_ADJUSMENT_INTERVAL === 0 && newestBlock.index !== 0) { // 10번째, 20번째, 30번째 블록부터 새로 난이도를 계산
+  
+  // 10(1 * DIFFICULTY_ADJUSMENT_INTERVAL)번째, 20번째, 30번째 블록부터 새로 난이도를 계산
+  if (newestBlock.index % DIFFICULTY_ADJUSMENT_INTERVAL === 0 && newestBlock.index !== 0) {
     return calculateNewDifficulty(newestBlock, getBlockchain());
   } else {
     return newestBlock.difficulty;

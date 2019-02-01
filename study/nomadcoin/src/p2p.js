@@ -3,7 +3,7 @@
 const WebSockets = require("ws");
  Blockchain = require("./blockchain");
 
- const {getNewestBlock, getBlockchain, isBlockStructureValid, addBlockToChain, replaceChain} = Blockchain; // 가장 최근 블록 요청
+const {getNewestBlock, getBlockchain, isBlockStructureValid, addBlockToChain, replaceChain} = Blockchain;
 
 // socket: 서버 사이의 커넥션
 // PeerB - PeerA 연결시 PeerB에게는 PeerA 정보가 있음
@@ -50,9 +50,9 @@ const startP2PServer =  server => {
 
 const initSocketConnection = ws => { // 새로운 소켓이 접속할때마다 호출
   sockets.push(ws);
-  handleSocketError(ws);
-  handleSocketMessages(ws);
-  sendMessage(ws, getLatest()); // 새로운 소켓에게 Message Creator를 통해 GET-LATEST 메시지를 보냄
+  handleSocketError(ws); // 에러에 대한 핸들 추가(에러 발생 시 해당 소켓을 소켓 목록에서 삭제 시키는 핸들러 추가)
+  handleSocketMessages(ws); // 소켓 메시지에 대한 핸들 추가(메시지 종류에 따라 블록체인 반환, 최근 블록 반환 등 프로세스 수행. )
+  sendMessage(ws, getLatest()); // 연결된 소켓에게 Message Creator를 통해 GET-LATEST 메시지를 보냄
 }
 
 const parseData = data => {
@@ -142,9 +142,10 @@ const handleSocketError = ws => { // 소켓에 에러 발생 혹은 커넥션 �
 
 const connectToPeers = newPeer => { // newPeer = 웹 소켓 서버가 실행되고 있는 URL
   const ws = new WebSockets(newPeer);
-  ws.on("open", () => { // ws의 소켓을 열어줌. socket connection 실행. 새로운 소켓이 연결될 때 실행
-    console.log('Open Socket!'); // 특정 소켓서버에 연결을 한 서버에게 보여짐. 즉, 자기 자신의 콘솔에 보임
-    initSocketConnection(ws);
+  ws.on("open", () => { // ws의 소켓을 열어줌. socket connection 실행. 새로운 소켓이 연결될 때 실행. 
+                        // // A서버에서 B서버로 P2P 연결하였을 때 A서버에서 실행
+    console.log('Open Socket!'); 
+    initSocketConnection(ws); // 소켓 커낵션 초기화
   });
 };
 

@@ -15,3 +15,4 @@ nodemon
 ws: 소켓 통신을 위한 모듈  
 nodemon
 hex-to-binary: 16진수를 2진수로 변환하기 위한 모듈
+elliptic: 개인키, 퍼블릭키를 사용하기 위한 모듈
