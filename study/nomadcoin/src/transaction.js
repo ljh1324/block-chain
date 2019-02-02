@@ -6,6 +6,8 @@ const CryptoJS = require("crypto-js"),
 
 const ec = new elliptic.ec("secp256k1");
 
+const COINBASE_AMOUNT = 50;
+
 class TxOut {
   constructor(address, amount) {
     this.address = address;
@@ -120,7 +122,7 @@ const updateUTxOuts = (newTxs, uTxOutList) => {
   return resultingUTxOuts;
 };
 
-const isTxInStructureValid = (txIn) => {
+const isTxInStructureValid = (txIn) => { // transaction input의 구조가 유효한지 확인
   // to do
   if (txIn === null) {
     return false;
@@ -135,19 +137,19 @@ const isTxInStructureValid = (txIn) => {
   }
 }
 
-const isAddressValid = (address) => {
-  if (address.length !== 130) {
+const isAddressValid = (address) => { // 주소가 유효한지 확인
+  if (address.length !== 130) { // 주소 길이는 130
     return false;
-  } else if (address.match("^[a-fA-F0-9]+$") === null) {
+  } else if (address.match("^[a-fA-F0-9]+$") === null) { // 주소는 a-f 또는 A-F 또는 0-9 문자만 있어야 함
     return false;
-  } else if (!address.startWith("04")) {
+  } else if (!address.startWith("04")) { // 주소는 04로 시작
     return false;
   } else {
     return true;
   }
 } 
 
-const isTxOutStructureValid = (txOut) => {
+const isTxOutStructureValid = (txOut) => { // transaction output의 구조가 유효한지 확인
   // to do
   if (txOut === null) {
     return false;
@@ -162,23 +164,83 @@ const isTxOutStructureValid = (txOut) => {
   }
 }
 
-const isTxStructureValid = (tx) => {
+const isTxStructureValid = (tx) => { // transaction이 유효한지 확인
   if (typeof tx.id !== "string") {
     console.log("Tx ID is not valid");
     return false;
   } else if (!(tx.txIns instanceof Array)) {
     console.log("The txIns are not an array");
     return false;
-  } else if (!tx.txIns.map(isTxInStructureValid).reduce((a, b) => a && b, true)) {
+  } else if (!tx.txIns.map(isTxInStructureValid).reduce((a, b) => a && b, true)) { // 모든 transaction input 구조가 유효한지 확인
     console.log("The structure of one of the txIn is not valid");
     return false;
   } else if (!(tx.txOuts instanceof Array )) {
     console.log("The txOuts are not an array")
     return false;
-  } else if (!tx.txOut.map(isTxOutStructureValid).reduce((a, b) => a && b, true)) {
+  } else if (!tx.txOut.map(isTxOutStructureValid).reduce((a, b) => a && b, true)) { // 모든 transaction output 구조가 유효한지 확인
     console.log("The structure of one of the txOut is not valid");
     return false;
   } else {
     return true;
   }
 }
+
+const validateTxIn = (txIn, tx, uTxOutList) => { // transaction input(사용할 transaction output) 검증
+  // transaction input은 transaction out을 reference.
+  const wantedTxOut = uTxOutList.find(uTxOut => uTxOut.txOutId === txIn.txOutId && uTxOut.txOutIndex === txIn.txOutIndex); // 아직 사용하지 않은 uTxOutList과 같은 id와 index를 가지는 uTxOut을 찾음
+  if (wantedTxOut === null) {
+    return false;
+  } else {
+    const address = wantedTxOut.address;
+    const key = ec.keyFromPublic(address, "hex"); // 퍼블릭 키(주소)를 받아와 key 생성
+    return key.verify(tx.id, txIn.signature); // 돈을 사용할 사람에 의하여 사인이 되었음을 체크
+  }
+}
+
+const getAmountInTxIn = (txIn, uTxOutList) => findUTxOut(txIn.txOutId, txIn.txOutIndex, uTxOutList).amount; // 사용하지 않은 transaction input에 대한 금액을 가져옴
+
+const validateTx = (tx, uTxOutList) => { // 트랜잭션 검증
+  if (!isTxStructureValid(tx)) { // 트랜잭션 구조가 옳바른지 확인
+    return false;
+  }
+
+  if (getTxId(tx) !== tx.id) { // tx 해시값과 tx의 id가 다를 경우 거래내역이 옳바르지 않음
+    return false;
+  }
+
+  const hasValidTxIns = tx.txIns.map(txIn => validateTxIn(txIn, tx, uTxOutList)); // transaction input 검증
+
+  if (!hasValidTxIns) { // 트랜잭션 인풋이 유효하지 않다면 false반환
+    return false;
+  }
+
+  const amountInTxIns = tx.txIns
+    .map(txIn => getAmountInTxIn(txIn, uTxOutList))
+    .reduce((a, b) => a + b, 0);
+
+  const amountInTxOuts = tx.txOuts
+    .map(txOut => txOut.amount)
+    .reduce((a, b) => a + b, 0);
+
+  if (amountInTxIns != amountInTxOuts) { // 트랜잭션 입력의 총 금액과 출력의 총 금액이 같지 않다면 false 반환
+    return false;
+  } else {
+    return true;
+  }
+};
+
+const validateCoinbaseTx = (tx, blockIndex) => { // 블록 생성시 채굴자에게 주어지는 트랜잭션 검증
+  if (getTxId(tx) !== tx.id) {
+    return false;
+  } else if (tx.txIns.length !== 1) { // Coinbase transaction은 한 개의 트랜잭션 인풋밖에 없음
+    return false;
+  } else if (tx.txIns[0].txOutIndex !== blockIndex) { // coinbase transaction output 인덱스는 블록의 인덱스와 같아야함
+    return false;
+  } else if (tx.txOuts.length !== 1) { // Coinbase transaction output은 채굴자에게 감. 채굴자는 단 한 명!
+    return false;
+  } else if (tx.txOuts[0].amount !== COINBASE_AMOUNT) {
+    return false;
+  } else {
+    return true;
+  }
+};
