@@ -1,5 +1,10 @@
 const CryptoJS = require("crypto-js"),
+  Wallet = require("./wallet"),
   hexToBinary = require("hex-to-binary");
+  Transactions = require('./transactions');
+
+const { getBalance, getPublicFromWallet } = Wallet;
+const { createCoinbaseTx, processTxs } = Transactions;
 
 const BLOCK_GENERATION_INTERVAL = 10; // 블록이 몇 초마다 생성될 것인지
 const DIFFICULTY_ADJUSMENT_INTERVAL = 10; // 몇 블록마다 난이도를 조정할 것인지
@@ -28,6 +33,8 @@ const genesisBlock = new Block( // 0번째 블록
 
 let blockchain = [genesisBlock];
 
+let uTxOuts = [];
+
 const getNewestBlock = () => blockchain[blockchain.length - 1]; // blockchain의 마지막 블록을 가져옴
 
 const getTimestamp = () => Math.round(new Date().getTime() / 1000); // 생성 시간을 받아옴
@@ -37,6 +44,7 @@ const getBlockchain = () => blockchain;
 const createHash = (index, previousHash, timestamp, data, difficulty, nonce) => // 데이터들을 받아 해싱하여 반환
   CryptoJS.SHA256(index + previousHash + timestamp + JSON.stringify(data) + difficulty + nonce).toString();
 
+/*
 const createNewBlock = data => { // 새로운 블록을 만듬
   const previousBlock = getNewestBlock(); // 이전 블록을 받아옴 
   const newBlockIndex = previousBlock.index + 1; // 이전 블록 다음 순서
@@ -50,6 +58,36 @@ const createNewBlock = data => { // 새로운 블록을 만듬
     difficulty,
   );
 
+  addBlockToChain(newBlock);
+  require('./p2p').broadcastNewBlock(); // 현재 서버와 연결된 노드에게 새로운 블록이 만들어졌다고 알림
+  return newBlock;
+}
+*/
+
+const createNewBlock = () => {
+  const coinbaseTx = createCoinbaseTx(
+    getPublicFromWallet(),
+    getNewestBlock().index + 1
+  );
+
+  //uTxOuts.push(coinbaseTx.txOuts[0]);
+  //uTxOuts.concat(coinbaseTx.txOuts);
+  const blockData = [coinbaseTx];
+  return createNewRawBlock(blockData);
+};
+
+const createNewRawBlock = data => { // 새로운 블록을 만듬
+  const previousBlock = getNewestBlock(); // 이전 블록을 받아옴 
+  const newBlockIndex = previousBlock.index + 1; // 이전 블록 다음 순서
+  const newTimestamp = getTimestamp(); // 블록 생성 시간
+  const difficulty = findDifficulty(); // 현재 까지 만들어진 블록체인을 통해 블록 난이도를 계산
+  const newBlock = findBlock( // 새로운 블록을 만듬
+    newBlockIndex,
+    previousBlock.hash,
+    newTimestamp,
+    data,
+    difficulty,
+  );
   addBlockToChain(newBlock);
   require('./p2p').broadcastNewBlock(); // 현재 서버와 연결된 노드에게 새로운 블록이 만들어졌다고 알림
   return newBlock;
@@ -144,7 +182,8 @@ const isBlockStructureValid = (block) => { // 블록의 구조가 유효한지 �
     typeof block.hash === 'string' &&
     typeof block.previousHash === 'string' &&
     typeof block.timestamp === 'number' &&
-    typeof block.data === 'string'
+    typeof block.data === 'object'
+    //typeof block.data === 'string'
   );
 };
 
@@ -188,11 +227,28 @@ const replaceChain = candidateChain => { // 후보체인을 비교를 통해 현
 
 const addBlockToChain = candidateBlock => { // 후보 블록을 블록체인을 추가함
   if (isBlockValid(candidateBlock, getNewestBlock())) { // 새로운 후보 블록이 유효할 경우
-    getBlockchain().push(candidateBlock);
-    return true;
+    const processedTxs = processTxs(
+      candidateBlock.data, 
+      uTxOuts, 
+      candidateBlock.index
+    );
+    
+    if (processedTxs === null) {
+      console.log("Couldnt process txs");
+      return false;
+    } else {
+      getBlockchain().push(candidateBlock);
+      uTxOuts = processedTxs;
+      return true;
+    }
   } else {
     return false;
   }
+};
+
+const getAccountBalance = () => {
+  console.log(uTxOuts);
+  return getBalance(getPublicFromWallet(), uTxOuts);
 };
 
 //addBlockToChain(createNewBlock("Hi"));
@@ -205,4 +261,5 @@ module.exports = {
   isBlockStructureValid,
   addBlockToChain,
   replaceChain,
+  getAccountBalance,
 }
