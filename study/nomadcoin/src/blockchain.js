@@ -1,10 +1,13 @@
 const CryptoJS = require("crypto-js"),
+  _ = require("lodash"),
   Wallet = require("./wallet"),
-  hexToBinary = require("hex-to-binary");
+  hexToBinary = require("hex-to-binary"),
+  Mempool = require("./mempool"),
   Transactions = require('./transactions');
 
-const { getBalance, getPublicFromWallet } = Wallet;
+const { getBalance, getPublicFromWallet, createTx, getPrivateFromWallet } = Wallet;
 const { createCoinbaseTx, processTxs } = Transactions;
+const { addToMempool, getMempool, updateMempool } = Mempool;
 
 const BLOCK_GENERATION_INTERVAL = 10; // 블록이 몇 초마다 생성될 것인지
 const DIFFICULTY_ADJUSMENT_INTERVAL = 10; // 몇 블록마다 난이도를 조정할 것인지
@@ -21,25 +24,38 @@ class Block {
   }
 }
 
+const genesisTx = {
+  txIns: [{ signature: "", txOutId: "", txOutIndex: 0 }],
+  txOuts: [
+    {
+      address:
+        "046c04c21bfc6ae4281f5a1b7252f7d08b49e857d4824f20b5f91ccb218c1da5633c66f0d8773e8fdc97a43b63aa12052756e3275b1932d4e05a6a0b5bf839250f",
+      amount: 50
+    }
+  ],
+  id: "9fb7fbb66ed1ac979eea4987232a070890d3d056a83fb41c84a0f982e66963b3"
+};
+
 const genesisBlock = new Block( // 0번째 블록
   0,
-  "E1407DF9248B2015F05C00E0EA4202AB874918EBE608269F73D16792FC72F36A", // hash of block
-  null,
-  1548741927,
-  "This is the genesis",
-  10,
+  "07de89c01bf44d0cb7b54a14731bd6bfff6f73f85dcdee3b8a66b10bb61511db",
+  "",
+  1518512316,
+  [genesisTx],
   0,
+  0
 );
 
 let blockchain = [genesisBlock];
 
-let uTxOuts = [];
+//let uTxOuts = [];
+let uTxOuts = processTxs(blockchain[0].data, [], 0);
 
 const getNewestBlock = () => blockchain[blockchain.length - 1]; // blockchain의 마지막 블록을 가져옴
 
 const getTimestamp = () => Math.round(new Date().getTime() / 1000); // 생성 시간을 받아옴
 
-const getBlockchain = () => blockchain;
+const getBlockchain = () => blockchain; // 블록 체인 반환
 
 const createHash = (index, previousHash, timestamp, data, difficulty, nonce) => // 데이터들을 받아 해싱하여 반환
   CryptoJS.SHA256(index + previousHash + timestamp + JSON.stringify(data) + difficulty + nonce).toString();
@@ -64,15 +80,16 @@ const createNewBlock = data => { // 새로운 블록을 만듬
 }
 */
 
-const createNewBlock = () => {
-  const coinbaseTx = createCoinbaseTx(
-    getPublicFromWallet(),
-    getNewestBlock().index + 1
+const createNewBlock = () => { // 새로운 블록 생성
+  const coinbaseTx = createCoinbaseTx( // 새로운 블록 생성시 채굴자에게 주는 보상 transaction 생성
+    getPublicFromWallet(), // Wallet으로 부터 퍼블릭키(주소)를 가져옴
+    getNewestBlock().index + 1 // 가장 최근 블록 index + 1을 txOutIndex로 지정
   );
-
+  //console.log("뀨뀨");
   //uTxOuts.push(coinbaseTx.txOuts[0]);
   //uTxOuts.concat(coinbaseTx.txOuts);
-  const blockData = [coinbaseTx];
+  const blockData = [coinbaseTx].concat(getMempool()); // 코인베이스와 함께 거래내역을 data에 추가
+  //console.log(blockData);
   return createNewRawBlock(blockData);
 };
 
@@ -88,7 +105,7 @@ const createNewRawBlock = data => { // 새로운 블록을 만듬
     data,
     difficulty,
   );
-  addBlockToChain(newBlock);
+  addBlockToChain(newBlock); // 블록을 검증 후 블록 체인에 추가
   require('./p2p').broadcastNewBlock(); // 현재 서버와 연결된 노드에게 새로운 블록이 만들어졌다고 알림
   return newBlock;
 }
@@ -226,19 +243,22 @@ const replaceChain = candidateChain => { // 후보체인을 비교를 통해 현
 };
 
 const addBlockToChain = candidateBlock => { // 후보 블록을 블록체인을 추가함
-  if (isBlockValid(candidateBlock, getNewestBlock())) { // 새로운 후보 블록이 유효할 경우
-    const processedTxs = processTxs(
+  if (isBlockValid(candidateBlock, getNewestBlock())) { // 새로운 후보 블록이 구조, 순서번호, 해시값, 이전 해시값, 생성시간이 유효할 경우
+    const processedTxs = processTxs( // 후보 블록의 거래내역 검증(코인베이스, 일반거래 구조 및 transaction input이 중복되지 않는지, 전자서명이 제대로 됬는지, 거래의 input, output이 같은지) 후 
+                                     // uTxOuts(사용하지 않은 transaction list)에서 블록에 업데이트 된 거래내역을 지워 반환
       candidateBlock.data, 
       uTxOuts, 
       candidateBlock.index
     );
-    
-    if (processedTxs === null) {
+    //console.log("뀨잉");
+    //console.log(processedTxs);
+    if (processedTxs === null) { // 후보 블록의 data 검증에 실패했을 시
       console.log("Couldnt process txs");
       return false;
     } else {
       getBlockchain().push(candidateBlock);
       uTxOuts = processedTxs;
+      updateMempool(uTxOuts); // memPool에서 uTxOuts에 남아 있는 거래내역만 남기고 지움
       return true;
     }
   } else {
@@ -246,11 +266,19 @@ const addBlockToChain = candidateBlock => { // 후보 블록을 블록체인을 
   }
 };
 
+const getUTxOutList = () => _.cloneDeep(uTxOuts); // uTxOuts의 복사본을 반환
+
 const getAccountBalance = () => {
   console.log(uTxOuts);
   return getBalance(getPublicFromWallet(), uTxOuts);
 };
 
+const sendTx = (address, amount) => {
+  const tx = createTx(address, amount, getPrivateFromWallet(), getUTxOutList(), getMempool());
+  //console.log(tx);
+  addToMempool(tx, getUTxOutList());
+  return tx;
+}
 //addBlockToChain(createNewBlock("Hi"));
 //console.log(getBlockchain());
 
@@ -262,4 +290,5 @@ module.exports = {
   addBlockToChain,
   replaceChain,
   getAccountBalance,
+  sendTx,
 }
