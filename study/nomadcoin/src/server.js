@@ -3,11 +3,13 @@ const express = require("express"),
   morgan = require("morgan"),
   Blockchain = require("./blockchain"),
   P2P = require("./p2p"),
+  Mempool = require("./mempool"),
   Wallet = require("./wallet");
 
 const { getBlockchain, createNewBlock, getAccountBalance, sendTx, } = Blockchain;
 const { startP2PServer, connectToPeers } = P2P;
 const { initWallet } = Wallet;
+const { getMempool } = Mempool;
 
 // const PORT = 3000;
 // 만약 HTTP_PORT가 없을 경우 3000번 포트를 열어줌
@@ -47,7 +49,7 @@ app.get("/me/balance", (req, res) => {
 
 app.route("/transactions")
   .get((req, res) => {
-    
+    res.send(getMempool());
   })
   .post((req, res) => {
     try {
