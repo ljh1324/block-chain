@@ -1,9 +1,18 @@
 // 클라이언트, 서버, 소켓을 위한 코드
 
-const WebSockets = require("ws");
- Blockchain = require("./blockchain");
+const WebSockets = require("ws"),
+  Mempool = require("./mempool"),
+  Blockchain = require("./blockchain");
 
-const {getNewestBlock, getBlockchain, isBlockStructureValid, addBlockToChain, replaceChain} = Blockchain;
+const { getNewestBlock,
+   getBlockchain, 
+   isBlockStructureValid, 
+   addBlockToChain, 
+   replaceChain,
+   handleIncommingTx,
+} = Blockchain;
+
+const { getMempool } = Mempool;
 
 // socket: 서버 사이의 커넥션
 // PeerB - PeerA 연결시 PeerB에게는 PeerA 정보가 있음
@@ -13,6 +22,8 @@ const sockets = [];
 const GET_LATEST = "GET-LATEST";
 const GET_ALL = "GET_ALL";
 const BLOCKCHAIN_RESPONSE = "BLOCKCHAIN_RESPONSE";
+const REQUEST_MEMPOOL = "REQUEST_MEMPOOL";
+const MEMPOOL_RESPONCE = "MEMPOOL_RESPONSE";
 
 // Message Creators
 const getLatest = () => {
@@ -36,6 +47,20 @@ const blockchainResponse = (data) => {
   };
 };
 
+const getAllMempool = () => {
+  return {
+    type: REQUEST_MEMPOOL,
+    data: null
+  };
+};
+
+const mempoolResponse = (data) => {
+  return {
+    type: MEMPOOL_RESPONCE,
+    data: data
+  };
+};
+
 const getSockets = () => sockets;
 
 const startP2PServer =  server => {
@@ -45,6 +70,9 @@ const startP2PServer =  server => {
     console.log(`Hello Socket!`);
     initSocketConnection(ws);
   });
+  wsServer.on("error", () => {
+    console.log("error");
+  });
   console.log('Nomadcoin P2P Server Running!');
 };
 
@@ -53,6 +81,14 @@ const initSocketConnection = ws => { // 새로운 소켓이 접속할때마다 �
   handleSocketError(ws); // 에러에 대한 핸들 추가(에러 발생 시 해당 소켓을 소켓 목록에서 삭제 시키는 핸들러 추가)
   handleSocketMessages(ws); // 소켓 메시지에 대한 핸들 추가(메시지 종류에 따라 블록체인 반환, 최근 블록 반환 등 프로세스 수행. )
   sendMessage(ws, getLatest()); // 연결된 소켓에게 Message Creator를 통해 GET-LATEST 메시지를 보냄
+  setTimeout(() => { // mempool을 요청하는 메시지를 1초후에 보냄. 서로 체인을 교환 후 mempool을 맞추도록 함
+    sendMessageToAll(ws, getAllMempool()); // changed line
+  }, 1000);
+  setInterval(() => { // 소켓 연결이 죽지 않도록 1초마다 메시지를 보냄
+    if (sockets.includes(ws)) {
+      sendMessage(ws, "");
+    }
+  }, 1000);
 }
 
 const parseData = data => {
@@ -85,6 +121,23 @@ const handleSocketMessages = ws => {
           break;
         }
         handleBlockchainResponse(receivedBlocks);
+        break;
+      case REQUEST_MEMPOOL:
+        sendMessage(ws, returnMempool());
+        break;
+      case MEMPOOL_RESPONCE:
+        const receivedTxs = message.data;
+        if (receivedTxs === null) {
+          return;
+        }
+        receivedTxs.forEach(tx => {
+          try {
+            console.log(tx);
+            handleIncommingTx(tx);
+          } catch (e) {
+            console.log(e);
+          }
+        });
         break;
     }
   });
@@ -121,15 +174,19 @@ const handleBlockchainResponse = receivedBlocks => {
   }
 };
 
-const sendMessage = (ws, message) => ws.send(JSON.stringify(message));
+const returnMempool = () => mempoolResponse(getMempool());
 
-const sendMessageToAll = message => sockets.forEach(ws => sendMessage(ws, message));
+const sendMessage = (ws, message) => ws.send(JSON.stringify(message)); // ws에게 메시지를 보냄
 
-const responseLatest = () => blockchainResponse([getNewestBlock()]); 
+const sendMessageToAll = message => sockets.forEach(ws => sendMessage(ws, message)); // 연결된 소켓에 메시지를 보냄
 
-const responseAll = () => blockchainResponse(getBlockchain());
+const responseLatest = () => blockchainResponse([getNewestBlock()]);  // MessageCreator blockchainResponse를 통해 가장 최근 블록 반환
 
-const broadcastNewBlock = () => sendMessageToAll(responseLatest());
+const responseAll = () => blockchainResponse(getBlockchain()); // MessageCreator blockchainResponse를 통해 전체 체인을 반환
+
+const broadcastNewBlock = () => sendMessageToAll(responseLatest()); // 생성된 가장 최근 블록을 반환
+
+const broadcastMempool = () => sendMessageToAll(returnMempool()); 
 
 const handleSocketError = ws => { // 소켓에 에러 발생 혹은 커넥션 종료 시 처리할 이벤트 등록
   const closeSocketConnection = ws => {
@@ -147,10 +204,14 @@ const connectToPeers = newPeer => { // newPeer = 웹 소켓 서버가 실행되�
     console.log('Open Socket!'); 
     initSocketConnection(ws); // 소켓 커낵션 초기화
   });
+
+  ws.on("error", () => console.log("Connection failed"));
+  ws.on("close", () => console.log("Connection failed"));
 };
 
 module.exports = {
   startP2PServer,
   connectToPeers,
   broadcastNewBlock,
+  broadcastMempool,
 };

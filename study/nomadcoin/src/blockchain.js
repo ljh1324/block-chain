@@ -210,16 +210,29 @@ const isChainValid = (candidateChain) => { // 체인이 유효한지 확인
   };
   if (!isGenesisValid(candidateChain[0])) { // 첫 번째 블록이 제네시스 블록이 아닐 경우
     console.log("The candidateChain's genesisBlock is not the same as our genesisBlock")
-    return false;
+    return null;
   }
-  for (let i = 1; i < candidateChain.length; i++) {
+
+  let foreignUTxOuts = [];
+
+  for (let i = 0; i < candidateChain.length; i++) {
+    const currentBlock = candidateChain[i];
+
     // genesis block은 검증이 필요 없기 때문에 1부터 시작
-    if (!isBlockValid(candidateChain[i], candidateChain[i - 1])) {
+    if (i !== 0 && !isBlockValid(currentBlock, candidateChain[i - 1])) {
       // i번째 블록이 이전 i - 1번 체인의 해시 값을 가지는지 확인, 순서 번호 확인
-      return false;
+      return null;
     }
+
+    foreignUTxOuts = processTxs(currentBlock.data, foreignUTxOuts, currentBlock.index);
+
+    if (foreignUTxOuts === null) {
+      return null;
+    }
+
   }
-  return true;
+
+  return foreignUTxOuts;
 };
 
 const sumDifficulty = anyBlockchain => 
@@ -229,13 +242,19 @@ const sumDifficulty = anyBlockchain =>
     .reduce((a, b) => a + b) // 배열의 원소를 모두 더해줌. ex. [1, 2, 3].reduce((a, b) => a + b) : 1(첫번쨰 원소) + 2(두번째 원소) = 3, 3(첫번째 원소 + 두번째 원소) + 3 = 
 
 const replaceChain = candidateChain => { // 후보체인을 비교를 통해 현재 체인과 바꿈
+  const foreignUTxOuts = isChainValid(candidateChain);
+  const validChain = foreignUTxOuts !== null;
+
   if (
-    isChainValid(candidateChain) && 
+    validChain && 
     sumDifficulty(candidateChain) > sumDifficulty(getBlockchain()) // 만약 후보 체인의 난이도가 더 높을 경우 더 높은 체인으로 바꿈. 더 긴체인을 바꿀 수 있으므로 데이터 소실 위험이 있음
     //candidateChain.length > getBlockchain().length // 후보 체인과 길이를 비교하여 더 긴 체인으로 체인을 바꿈
   ) {
     // 가지고 있는 블록체인 보다 더 긴 블록체인이 올 경우
     blockchain = candidateChain;
+    uTxOuts = foreignUTxOuts;
+    updateMempool(uTxOuts);
+    require("./p2p").broadcastNewBlock();
     return true;
   } else {
     return false;
@@ -277,8 +296,14 @@ const sendTx = (address, amount) => {
   const tx = createTx(address, amount, getPrivateFromWallet(), getUTxOutList(), getMempool());
   //console.log(tx);
   addToMempool(tx, getUTxOutList());
+  require('./p2p').broadcastMempool(); 
   return tx;
 }
+
+const handleIncommingTx = (tx) => {
+  addToMempool(tx, getUTxOutList());
+};
+
 //addBlockToChain(createNewBlock("Hi"));
 //console.log(getBlockchain());
 
@@ -291,4 +316,6 @@ module.exports = {
   replaceChain,
   getAccountBalance,
   sendTx,
+  handleIncommingTx,
+  getUTxOutList,
 }

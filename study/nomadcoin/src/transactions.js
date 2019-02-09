@@ -212,7 +212,8 @@ const isTxStructureValid = (tx) => { // transaction이 유효한지 확인
 const validateTxIn = (txIn, tx, uTxOutList) => { // transaction input(사용할 transaction output) 검증
   // transaction input은 transaction out을 reference.
   const wantedTxOut = uTxOutList.find(uTxOut => uTxOut.txOutId === txIn.txOutId && uTxOut.txOutIndex === txIn.txOutIndex); // 아직 사용하지 않은 uTxOutList과 같은 id와 index를 가지는 uTxOut을 찾음
-  if (wantedTxOut === null) {
+  if (wantedTxOut === undefined) {
+    console.log(`Didn't find the wanted uTxOut, the tx: ${tx} is invalid`);
     return false;
   } else {
     //console.log('in validateTxIn');
