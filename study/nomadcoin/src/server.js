@@ -8,7 +8,7 @@ const express = require("express"),
 
 const { getBlockchain, createNewBlock, getAccountBalance, sendTx, } = Blockchain;
 const { startP2PServer, connectToPeers } = P2P;
-const { initWallet } = Wallet;
+const { initWallet, getPublicFromWallet } = Wallet;
 const { getMempool } = Mempool;
 
 // const PORT = 3000;
@@ -45,6 +45,10 @@ app.post("/peers", (req, res) => {
 app.get("/me/balance", (req, res) => {
   const balance = getAccountBalance();
   res.send( {balance} );
+});
+
+app.get("/me/address", (req, res) => {
+  res.send(getPublicFromWallet());
 });
 
 app.route("/transactions")
